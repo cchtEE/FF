@@ -19,9 +19,14 @@ module load R-3.2.0
 # bowtie2-build GCA_000001405.15_GRCh38_genomic.fna bwtie38
 SOFTBWT=/gpfs/hpchome/ppaluoja/software/bowtie2-2.3.3.1/bowtie2
 REF=/gpfs/rocket/samba/CCHT/BelgiaNIPT/fastq/bwtie38
+locations="locations"
 
-location=/
+# Read locations from file and calculate FF.
+while IFS='' read -r line || [[ -n "$line" ]]; do
+    location=$line
+    sample=${location##*/}
+    zcat --force $location/*.fastq* | $SOFTBWT --very-sensitive -X 500 -q - --norc -x $REF --no-unal -p 10 --mm | samtools view -q 30 -S - | python3 separator.py $sample "50000" | Rscript seqff.R >> results.ff.tsv
+done < "$locations"
 
-folder=${location##*/}
-zcat --force $location/*.fastq* | $SOFTBWT --very-sensitive -X 500 -q - --norc -x $REF --no-unal -p 10 --mm | samtools view -q 30 -S - | python3 separator.py $folder "50000" | Rscript seqff.R >> results2.ff.tsv
+
 echo "DONE!"
