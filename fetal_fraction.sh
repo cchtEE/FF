@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=01:30:00
+#SBATCH --time=08:30:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=priitpaluoja@gmail.com
 #SBATCH --mem=14000
@@ -25,8 +25,8 @@ locations="locations"
 while IFS='' read -r line || [[ -n "$line" ]]; do
     location=$line
     sample=${location##*/}
-    zcat --force $location/*.fastq* | $SOFTBWT --very-sensitive -X 500 -q - --norc -x $REF --no-unal -p 10 --mm | samtools view -q 30 -S - | python3 separator.py $sample "50000" | Rscript seqff.R >> results.ff.tsv
+    echo $sample
+    zcat --force $location/*.fastq* | $SOFTBWT --very-sensitive -X 500 -q - --norc -x $REF --no-unal -p 10 --mm | samtools view -q 10 -S - | python3 separator.py $sample "50000" | Rscript seqff.R >> results.all.10.ff.tsv
 done < "$locations"
-
 
 echo "DONE!"
