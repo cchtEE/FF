@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=08:30:00
+#SBATCH --time=14:30:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=priitpaluoja@gmail.com
 #SBATCH --mem=25000
