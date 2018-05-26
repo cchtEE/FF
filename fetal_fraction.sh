@@ -9,7 +9,7 @@
 # The job requires 1 task per node
 #SBATCH --ntasks-per-node=1
 # Number of CPU cores per task
-#SBATCH --cpus-per-task=40
+#SBATCH --cpus-per-task=20
 
 # Bash script authors: Priit Paluoja, Priit Palta, Hindrek Teder, Kaarel Krjutshkov. (CCHT)
 #
@@ -40,7 +40,7 @@ while IFS='' read -r line || [[ -n "$line" ]]; do
     location=$line
     sample=${location##*/}
     echo $sample
-    zcat --force $location/*.fastq* | bowtie2 --very-sensitive -X 500 -q - --norc -x $REF --no-unal -p 40 | samtools view -q 0 -S - | cut -f3,4 | Rscript seqff.sam.R | (printf "$sample\t" && cat) >> results.all.hg19.hg19.q0.ff.sam.tsv
+    zcat --force $location/*.fastq* | bowtie2 --very-sensitive -X 500 -q - --norc -x $REF --no-unal -p 20 | samtools view -q 30 -S - | cut -f3,4 | Rscript seqff.sam.R | (printf "$sample\t" && cat) >> results.all.hg19.hg19.q30.ff.sam.tsv
 done < "$locations"
 
 echo "DONE!"
