@@ -1,16 +1,17 @@
 #!/bin/bash
-#SBATCH --time=14:30:00
+#SBATCH --time=24:00:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=priitpaluoja@gmail.com
-#SBATCH --mem=25000
+#SBATCH --mem=5000
 #SBATCH -J SeqSAM
 # The job requires 1 compute node
 #SBATCH -N 1
 # The job requires 1 task per node
 #SBATCH --ntasks-per-node=1
 # Number of CPU cores per task
-#SBATCH --cpus-per-task=20
+#SBATCH --cpus-per-task=10
 
+# ~20 minutes per sample
 # Bash script authors: Priit Paluoja, Priit Palta, Hindrek Teder, Kaarel Krjutshkov. (CCHT)
 #
 # Usage:
@@ -40,7 +41,7 @@ while IFS='' read -r line || [[ -n "$line" ]]; do
     location=$line
     sample=${location##*/}
     echo $sample
-    zcat --force $location/*.fastq* | bowtie2 --very-sensitive -X 500 -q - --norc -x $REF --no-unal -p 20 | samtools view -q 30 -S - | cut -f3,4 | Rscript seqff.sam.R | (printf "$sample\t" && cat) >> results.hg19.q30.ff.sam.tsv
+    zcat --force $location/*.fastq* | bowtie2 --very-sensitive -X 500 -q - --norc -x $REF --no-unal -p 10 | samtools view -q 30 -S - | cut -f3,4 | Rscript seqff.sam.R | (printf "$sample\t" && cat) >> results.hg19.q30.ff.sam.tsv
 done < "$locations"
 
 echo "DONE!"
