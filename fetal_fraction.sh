@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=2:00:00
+#SBATCH --time=24:00:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=priitpaluoja@gmail.com
 #SBATCH --mem=5000
@@ -29,7 +29,7 @@ source activate ff # Source most provide bowtie2 and samtools
 # Pre-built Bowtie 2 index (must be GRCh37/hg19)
 REF=/gpfs/hpchome/ppaluoja/software/databases/hg19
 # File which provides path(s) to fastq/fastq.gz files. For each sample, all the sample files must be in the same directory. Locations file can contain multiple samples.
-locations="locations1.txt"
+locations="locations.txt"
 
 # Read locations from file and calculate FF.
 # 1. Concatenate fastq
@@ -41,17 +41,19 @@ while IFS='' read -r line || [[ -n "$line" ]]; do
     sample=${location##*/}
     echo $sample
     # Align and filter
-    zcat --force $location/*.fastq* | bowtie2 --very-sensitive -X 500 -q - --norc -x $REF --no-unal -p 10 | samtools view -q 30 -S - > $sample.aligned.sam
+    zcat --force $location/*.fastq* | bowtie2 --very-sensitive -X 500 -q - --norc -x $REF --no-unal -p 10 | samtools view -h -q 30 -S -o $sample.aligned.sam
     # Sort and index for gender determination
-    samtools view -Sb $sample.aligned.sam | samtools sort > $sample.aligned.sorted.bam
+    samtools view -Sb $sample.aligned.sam | samtools sort -o $sample.aligned.sorted.bam
     samtools index $sample.aligned.sorted.bam
     # Get statistics; keep chromosome names and read counts; chromosomes 13,18,21,X; last line / (sum of all lines - last line) -> ratio of Y and remaining chromosomes
-    gender=$(cat $sample.aligned.sorted.bam | samtools idxstats | cut -f1,3 | head -n 24 | sed '/chr13\|chr18\|chr21\|chrX/d' |  awk '{ sum += $2 } END { print $2/(sum-$2) }')
+    gender=$(samtools idxstats $sample.aligned.sorted.bam | cut -f1,3 | head -n 24 | sed '/chr13\|chr18\|chr21\|chrX/d' | awk '{ sum += $2 } END { print $2/(sum-$2) }')
+    echo "$gender"
     # Calculate fetal fraction + append gender ratio
-    cat $sample.aligned.sam | cut -f3,4 | Rscript seqff.sam.R | (printf "$sample\t$gender\t" && cat) >> results.sam.tsv
+    cat $sample.aligned.sam | samtools view -S | cut -f3,4 | Rscript seqff.sam.R | (printf "$sample\t$gender\t" && cat) >> results.sam.tsv
+    # Clean up
     rm $sample.aligned.sam
     rm $sample.aligned.sorted.bam
-    rm $sample.aligned.sorted.bai
+    rm $sample.aligned.sorted.bam.bai
 done < "$locations"
 
 
