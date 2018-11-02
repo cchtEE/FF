@@ -1,60 +1,28 @@
 #!/bin/bash
-#SBATCH --time=24:00:00
-#SBATCH --mail-type=ALL
-#SBATCH --mail-user=priitpaluoja@gmail.com
-#SBATCH --mem=5000
-#SBATCH -J SeqSAM1
-# The job requires 1 compute node
-#SBATCH -N 1
-# The job requires 1 task per node
-#SBATCH --ntasks-per-node=1
-# Number of CPU cores per task
-#SBATCH --cpus-per-task=10
 
 # Bash script authors: Priit Paluoja, Priit Palta, Hindrek Teder, Kaarel Krjutshkov. (CCHT)
 #
 # Usage:
-# 1. Provide system with R and Anaconda with source "ff" which contains bowtie2 and samtools. (conda install bowtie2 and conda install samtools)
+# 1. Provide system with Bowtie 2, Samtools and R.
 # 2. Download and modify seqFF to accept piped sam file.
-# 3. Download bowtie2 hg19 pre-built index file and update bash script with corresponding location
-# 4. Fill file "locations" with folder paths to samples. All sample X files must be in one folder. Locations can contain any number of samples.
-# 5. Run the script. Last tested on Rocket cluster (rocket.hpc.ut.ee) on 26.05.2018.
+# 3. Download Bowtie 2 hg19 pre-built index file and update bash script with corresponding location.
+# 4. All sample X files must be in one folder.
+
+INPUT="$1"  # (un)compressed FASTQ
+OUTPUT="$2"  # output directory
+CPUS="$3"  # number of CPUs
+MEM="$4"M  # memory per CPU in megabytes
+REF=software/SeqFF/reference/hg19  # pre-built Bowtie 2 index (must be GRCh37/hg19)
+SAMPLE="$(basename "$INPUT" .fastq)"  # sample name
 
 
-module load R-3.2.0
-module load python-3.6.3
+bowtie2 -x "$REF" -U "$INPUT" --very-sensitive -p "$CPUS" |  # aligne
+samtools view -u -q 30 - |  # convert and filter
+samtools sort -m "$MEM" -o "$OUTPUT"/aligned.filtered.sorted.bam -  # sort
+samtools index "$OUTPUT"/aligned.filtered.sorted.bam  # index
 
-source activate ff # Source most provide bowtie2 and samtools
+# Get statistics; keep chromosome names and read counts; chromosomes 13, 18, 21, X; last line / (sum of all lines - last line) -> ratio of Y and remaining chromosomes
+GENDER="$(samtools idxstats "$OUTPUT"/aligned.filtered.sorted.bam | cut -f 1,3 | head -n 24 | sed '/chr13\|chr18\|chr21\|chrX/d' | awk '{ sum += $2 } END { print $2 / (sum - $2) }')"
 
-# Pre-built Bowtie 2 index (must be GRCh37/hg19)
-REF=/gpfs/hpchome/ppaluoja/software/databases/hg19
-# File which provides path(s) to fastq/fastq.gz files. For each sample, all the sample files must be in the same directory. Locations file can contain multiple samples.
-locations="locations.txt"
-
-# Read locations from file and calculate FF.
-# 1. Concatenate fastq
-# 2. Map
-# 3. Filter
-# 4. Calculate FF
-while IFS='' read -r line || [[ -n "$line" ]]; do
-    location=$line
-    sample=${location##*/}
-    echo $sample
-    # Align and filter
-    zcat --force $location/*.fastq* | bowtie2 --very-sensitive -X 500 -q - --norc -x $REF --no-unal -p 10 | samtools view -h -q 30 -S -o $sample.aligned.sam
-    # Sort and index for gender determination
-    samtools view -Sb $sample.aligned.sam | samtools sort -o $sample.aligned.sorted.bam
-    samtools index $sample.aligned.sorted.bam
-    # Get statistics; keep chromosome names and read counts; chromosomes 13,18,21,X; last line / (sum of all lines - last line) -> ratio of Y and remaining chromosomes
-    gender=$(samtools idxstats $sample.aligned.sorted.bam | cut -f1,3 | head -n 24 | sed '/chr13\|chr18\|chr21\|chrX/d' | awk '{ sum += $2 } END { print $2/(sum-$2) }')
-    echo "$gender"
-    # Calculate fetal fraction + append gender ratio
-    cat $sample.aligned.sam | samtools view -S | cut -f3,4 | Rscript seqff.sam.R | (printf "$sample\t$gender\t" && cat) >> results.sam.tsv
-    # Clean up
-    rm $sample.aligned.sam
-    rm $sample.aligned.sorted.bam
-    rm $sample.aligned.sorted.bam.bai
-done < "$locations"
-
-
-echo "DONE!"
+# Calculate fetal fraction + append gender ratio
+samtools view "$OUTPUT"/aligned.filtered.sorted.bam | cut -f 3,4 | Rscript software/SeqFF/seqff.sam.R | (printf "$SAMPLE\t$GENDER\t" && cat) > "$OUTPUT"/fetal_fraction.tsv
